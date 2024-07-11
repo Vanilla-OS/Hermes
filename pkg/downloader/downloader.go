@@ -56,8 +56,7 @@ func CheckForNewRelease(releaseIndex, buildsPath string) {
 	releaseFilePath := filepath.Join(buildsPath, releaseFileName)
 
 	if !isDownloaded(releaseFilePath) {
-		buildID := extractBuildID(latestRelease.Url)
-		nightlyLink := fmt.Sprintf("https://nightly.link/Vanilla-OS/live-iso/actions/runs/%s", buildID)
+		nightlyLink := fmt.Sprintf("https://nightly.link%s/%s", extractRepoPath(latestRelease.Url), latestRelease.Id[1:])
 		zipLink, err := getZipLink(nightlyLink)
 		if err != nil {
 			log.Fatalf("error retrieving zip link: %v", err)
@@ -68,14 +67,17 @@ func CheckForNewRelease(releaseIndex, buildsPath string) {
 	cleanupBuilds(buildsPath, 3)
 }
 
-func extractBuildID(buildURL string) string {
+func extractRepoPath(buildURL string) string {
 	parsedURL, err := url.Parse(buildURL)
 	if err != nil {
 		log.Fatalf("error parsing URL %s: %v", buildURL, err)
 	}
-
+	// NOTE: Assuming the URL is in the form "https://github.com/owner/repo/actions/runs/ID"
 	segments := strings.Split(parsedURL.Path, "/")
-	return segments[len(segments)-1]
+	if len(segments) < 5 {
+		log.Fatalf("unexpected URL format: %s", buildURL)
+	}
+	return strings.Join(segments[:3], "/")
 }
 
 func getZipLink(nightlyLink string) (string, error) {
