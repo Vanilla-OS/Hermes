@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/vanilla-os/Hermes/pkg/downloader"
@@ -23,8 +25,31 @@ func main() {
 	flag.StringVar(&root, "root", "", "root of builds")
 	flag.Parse()
 
+	if interval == 0 {
+		intervalEnv := os.Getenv("HERMES_INTERVAL")
+		if intervalEnv != "" {
+			intervalParsed, err := strconv.Atoi(intervalEnv)
+			if err != nil {
+				log.Fatalf("invalid value for HERMES_INTERVAL: %v", err)
+			}
+			interval = intervalParsed
+		}
+	}
+
+	if releaseIndex == "" {
+		releaseIndex = os.Getenv("HERMES_RELEASE_INDEX")
+	}
+
+	if codename == "" {
+		codename = os.Getenv("HERMES_CODENAME")
+	}
+
+	if root == "" {
+		root = os.Getenv("HERMES_ROOT")
+	}
+
 	if interval == 0 || releaseIndex == "" || codename == "" || root == "" {
-		log.Fatalf("all flags must be set. usage: -interval=30 -releaseIndex=<URL> -codename=<name> -root=<path>")
+		log.Fatalf("all flags or environment variables must be set. usage: -interval=30 -releaseIndex=<URL> -codename=<name> -root=<path>")
 	}
 
 	buildsPath := utils.GetBuildsPath(root, codename)
