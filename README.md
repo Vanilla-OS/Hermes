@@ -19,6 +19,16 @@ hermes -interval=30 \
        -root="./builds"
 ```
 
+or via environment variables:
+
+```bash
+export HERMES_INTERVAL=30
+export HERMES_RELEASE_INDEX="https://raw.githubusercontent.com/Vanilla-OS/info/main/devBuilds.json"
+export HERMES_CODENAME="orchid"
+export HERMES_ROOT="./builds"
+hermes
+```
+
 ### Building from Source
 
 To build the Hermes binary from source, run:
