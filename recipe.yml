@@ -1,0 +1,41 @@
+name: Hermes Image
+id: hermes
+stages:
+  - id: build
+    base: ghcr.io/vanilla-os/pico:main
+    singlelayer: false
+    labels:
+      maintainer: Vanilla OS Contributors
+    entrypoint:
+      exec:
+        - ./app/hermes
+    args:
+      HERMES_INTERVAL: 0
+      HERMES_RELEASE_INDEX: release
+      HERMES_CODENAME: codename
+      HERMES_ROOT: directory
+    modules:
+      - name: update-repo
+        type: shell
+        commands:
+          - apt-get update
+
+      - name: install-deps
+        type: apt
+        source:
+          packages:
+            - git
+            - golang
+            - nano
+
+      - name: build-app
+        type: shell
+        source:
+          type: git
+          url: https://github.com/Vanilla-OS/Hermes
+          branch: main
+          commit: latest
+        commands:
+          - mv /sources/build-app /app
+          - cd /app
+          - go build -o hermes .
