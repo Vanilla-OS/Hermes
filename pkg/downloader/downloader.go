@@ -64,7 +64,7 @@ func CheckForNewRelease(releaseIndex, buildsPath string) {
 		downloadFile(releaseFilePath, zipLink)
 	}
 	utils.CreateSymlink(filepath.Base(releaseFilePath), filepath.Join(buildsPath, "latest.zip"))
-	cleanupBuilds(buildsPath, 3)
+	cleanupBuilds(buildsPath, 2)
 }
 
 func extractRepoPath(buildURL string) string {
