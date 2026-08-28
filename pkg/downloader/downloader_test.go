@@ -80,6 +80,22 @@ func TestSyncPublishesBothArchitectures(t *testing.T) {
 	if updated || requests.Load() != 2 {
 		t.Fatalf("unchanged run downloaded again, updated=%v requests=%d", updated, requests.Load())
 	}
+	legacyState := state{
+		RunID: 42,
+		Files: map[string]string{
+			"amd64_iso":    isoName("amd64", "20260826"),
+			"amd64_sha256": strings.TrimSuffix(isoName("amd64", "20260826"), ".iso") + ".sha256.txt",
+			"arm64_iso":    isoName("arm64", "20260826"),
+			"arm64_sha256": strings.TrimSuffix(isoName("arm64", "20260826"), ".iso") + ".sha256.txt",
+		},
+	}
+	encodedState, err := json.Marshal(legacyState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".hermes-state.json"), encodedState, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	updated, err = syncer.Sync(context.Background(), testRelease(43, "2026-08-27"))
 	if err != nil {
