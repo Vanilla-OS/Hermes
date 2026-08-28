@@ -26,6 +26,18 @@ func TestSyncPublishesBothArchitectures(t *testing.T) {
 	if err := os.WriteFile(unknownPath, []byte("download page"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	preexisting := make(map[string]string, len(requiredArchitectures)*2)
+	for _, arch := range requiredArchitectures {
+		iso := isoName(arch, "20260812")
+		checksum := strings.TrimSuffix(iso, ".iso") + ".sha256.txt"
+		preexisting[iso] = "existing ISO"
+		preexisting[checksum] = "existing checksum"
+	}
+	for name, content := range preexisting {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
@@ -86,6 +98,12 @@ func TestSyncPublishesBothArchitectures(t *testing.T) {
 	}
 	if content, err := os.ReadFile(unknownPath); err != nil || string(content) != "download page" {
 		t.Fatalf("unrecognized file was changed: content=%q err=%v", content, err)
+	}
+	for name, expected := range preexisting {
+		content, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil || string(content) != expected {
+			t.Fatalf("preexisting file %s was changed: content=%q err=%v", name, content, err)
+		}
 	}
 }
 

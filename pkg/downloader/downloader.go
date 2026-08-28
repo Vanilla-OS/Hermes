@@ -60,8 +60,9 @@ type build struct {
 }
 
 type state struct {
-	RunID int64             `json:"run_id"`
-	Files map[string]string `json:"files"`
+	RunID   int64             `json:"run_id"`
+	Files   map[string]string `json:"files"`
+	Managed []string          `json:"managed,omitempty"`
 }
 
 type download struct {
@@ -98,7 +99,11 @@ func (s *Syncer) Sync(ctx context.Context, current release.Release) (bool, error
 		return false, err
 	}
 
-	complete, err := s.isComplete(current.ID)
+	previous, err := s.readState()
+	if err != nil {
+		return false, err
+	}
+	complete, err := s.isComplete(current.ID, previous)
 	if err != nil {
 		return false, err
 	}
@@ -151,7 +156,12 @@ func (s *Syncer) Sync(ctx context.Context, current release.Release) (bool, error
 	if err := s.writeManifest(builds); err != nil {
 		return false, err
 	}
-	if err := cleanupBuilds(s.config.Root, s.config.Keep); err != nil {
+	managed := previous.managedFiles()
+	for _, candidate := range builds {
+		managed = append(managed, candidate.ISOName, candidate.ChecksumName)
+	}
+	managed, err = cleanupBuilds(s.config.Root, s.config.Keep, managed)
+	if err != nil {
 		return false, err
 	}
 
@@ -160,7 +170,7 @@ func (s *Syncer) Sync(ctx context.Context, current release.Release) (bool, error
 		files[candidate.Arch+"_iso"] = candidate.ISOName
 		files[candidate.Arch+"_sha256"] = candidate.ChecksumName
 	}
-	if err := utils.WriteJSON(filepath.Join(s.config.Root, ".hermes-state.json"), state{RunID: current.ID, Files: files}); err != nil {
+	if err := utils.WriteJSON(filepath.Join(s.config.Root, ".hermes-state.json"), state{RunID: current.ID, Files: files, Managed: managed}); err != nil {
 		return false, fmt.Errorf("write state: %w", err)
 	}
 	return true, nil
@@ -408,20 +418,18 @@ func (s *Syncer) writeManifest(builds []build) error {
 	return nil
 }
 
-func cleanupBuilds(root string, keep int) error {
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return fmt.Errorf("read builds directory: %w", err)
+func cleanupBuilds(root string, keep int, managed []string) ([]string, error) {
+	managedSet := make(map[string]bool, len(managed))
+	for _, name := range managed {
+		managedSet[name] = true
 	}
+
 	for _, arch := range requiredArchitectures {
 		var names []string
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			match := isoPattern.FindStringSubmatch(entry.Name())
+		for name := range managedSet {
+			match := isoPattern.FindStringSubmatch(name)
 			if match != nil && match[1] == arch {
-				names = append(names, entry.Name())
+				names = append(names, name)
 			}
 		}
 		sort.Slice(names, func(i, j int) bool {
@@ -437,32 +445,46 @@ func cleanupBuilds(root string, keep int) error {
 		}
 		for _, name := range names[keep:] {
 			if err := os.Remove(filepath.Join(root, name)); err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("remove old ISO %s: %w", name, err)
+				return nil, fmt.Errorf("remove old ISO %s: %w", name, err)
 			}
+			delete(managedSet, name)
 			checksumName := strings.TrimSuffix(name, ".iso") + ".sha256.txt"
-			if err := os.Remove(filepath.Join(root, checksumName)); err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("remove old checksum %s: %w", checksumName, err)
+			if managedSet[checksumName] {
+				if err := os.Remove(filepath.Join(root, checksumName)); err != nil && !os.IsNotExist(err) {
+					return nil, fmt.Errorf("remove old checksum %s: %w", checksumName, err)
+				}
+				delete(managedSet, checksumName)
 			}
 		}
 	}
-	return nil
+
+	retained := make([]string, 0, len(managedSet))
+	for name := range managedSet {
+		retained = append(retained, name)
+	}
+	sort.Strings(retained)
+	return retained, nil
 }
 
-func (s *Syncer) isComplete(runID int64) (bool, error) {
+func (s *Syncer) readState() (state, error) {
 	statePath := filepath.Join(s.config.Root, ".hermes-state.json")
 	stateFile, err := os.Open(statePath)
 	if os.IsNotExist(err) {
-		return false, nil
+		return state{}, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("open state: %w", err)
+		return state{}, fmt.Errorf("open state: %w", err)
 	}
 	defer stateFile.Close()
 
 	var current state
 	if err := json.NewDecoder(stateFile).Decode(&current); err != nil {
-		return false, fmt.Errorf("decode state: %w", err)
+		return state{}, fmt.Errorf("decode state: %w", err)
 	}
+	return current, nil
+}
+
+func (s *Syncer) isComplete(runID int64, current state) (bool, error) {
 	if current.RunID != runID {
 		return false, nil
 	}
@@ -502,6 +524,19 @@ func (s *Syncer) isComplete(runID int64) (bool, error) {
 		return false, fmt.Errorf("check downloads manifest: %w", err)
 	}
 	return true, nil
+}
+
+func (s state) managedFiles() []string {
+	if len(s.Managed) > 0 {
+		return append([]string(nil), s.Managed...)
+	}
+	managed := make([]string, 0, len(s.Files))
+	for _, name := range s.Files {
+		if name != "" {
+			managed = append(managed, name)
+		}
+	}
+	return managed
 }
 
 func validateBaseURL(value string) error {

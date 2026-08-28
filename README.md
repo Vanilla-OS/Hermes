@@ -35,8 +35,9 @@ downloads.json
 ```
 
 The state file and staging directories are private implementation details. Old
-dated builds are removed per architecture. Unrecognized files in the download
-root are left untouched.
+builds recorded in the Hermes state are removed per architecture. Preexisting
+and unrecognized files in the download root are left untouched so published
+URLs remain valid.
 
 ## Run Hermes
 
