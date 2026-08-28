@@ -1,0 +1,23 @@
+[Unit]
+Description=Vanilla OS ISO synchronization service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+EnvironmentFile=-/etc/hermes.env
+ExecStart=/usr/local/bin/hermes
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/downloads
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

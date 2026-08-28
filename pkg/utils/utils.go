@@ -1,27 +1,65 @@
 package utils
 
 import (
-	"log"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
 
-func GetBuildsPath(root, codename string) string {
-	return filepath.Join(root, codename)
+func CreateDir(path string) error {
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return fmt.Errorf("create directory %s: %w", path, err)
+	}
+	return nil
 }
 
-func CreateDir(path string) {
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		log.Fatalf("error creating directory %s: %v", path, err)
+func ReplaceSymlink(target, path string) error {
+	temporary := path + ".new"
+	if err := os.Remove(temporary); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove temporary symlink: %w", err)
 	}
+	if err := os.Symlink(target, temporary); err != nil {
+		return fmt.Errorf("create symlink: %w", err)
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+		return fmt.Errorf("replace symlink: %w", err)
+	}
+	return nil
 }
 
-func CreateSymlink(target, symlink string) {
-	if err := os.Remove(symlink); err != nil && !os.IsNotExist(err) {
-		log.Fatalf("error removing existing symlink %s: %v", symlink, err)
+func WriteJSON(path string, value any) error {
+	if err := CreateDir(filepath.Dir(path)); err != nil {
+		return err
 	}
-	if err := os.Symlink(target, symlink); err != nil {
-		log.Fatalf("error creating symlink %s -> %s: %v", symlink, target, err)
+
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".hermes-json-*")
+	if err != nil {
+		return fmt.Errorf("create temporary file: %w", err)
 	}
-	log.Printf("symlink created: %s -> %s", symlink, target)
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+
+	encoder := json.NewEncoder(temporary)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(value); err != nil {
+		temporary.Close()
+		return fmt.Errorf("encode JSON: %w", err)
+	}
+	if err := temporary.Chmod(0o644); err != nil {
+		temporary.Close()
+		return fmt.Errorf("set file permissions: %w", err)
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return fmt.Errorf("sync temporary file: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("close temporary file: %w", err)
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return fmt.Errorf("replace JSON file: %w", err)
+	}
+	return nil
 }

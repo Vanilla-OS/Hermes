@@ -1,8 +1,11 @@
 package release
 
 type Release struct {
-	Id   string `json:"Id"`
-	Date string `json:"Date"`
-	Arch string `json:"Arch"`
-	Url  string `json:"Url"`
+	ID        int64
+	Artifacts []Artifact
+}
+
+type Artifact struct {
+	Name    string `json:"name"`
+	Expired bool   `json:"expired"`
 }

@@ -1,41 +1,54 @@
 name: Hermes Image
 id: hermes
+vibversion: 1.1.0
+
 stages:
   - id: build
-    base: ghcr.io/vanilla-os/pico:main
-    singlelayer: false
+    base: golang:1.24-bookworm
+    modules:
+      - name: build-hermes
+        type: go
+        buildflags: -trimpath
+        buildvars:
+          GO_OUTPUT_BIN: /usr/bin/hermes
+        source:
+          type: git
+          url: https://github.com/Vanilla-OS/Hermes
+          branch: main
+          commit: latest
+
+  - id: runtime
+    base: debian:bookworm-slim
     labels:
       maintainer: Vanilla OS Contributors
-    entrypoint:
-      exec:
-        - ./app/hermes
-    args:
-      HERMES_INTERVAL: 0
-      HERMES_RELEASE_INDEX: release
-      HERMES_CODENAME: codename
-      HERMES_ROOT: directory
+      org.opencontainers.image.source: https://github.com/Vanilla-OS/Hermes
+    env:
+      HERMES_INTERVAL: "30"
+      HERMES_REPOSITORY: Vanilla-OS/live-iso
+      HERMES_WORKFLOW: build-iso.yml
+      HERMES_BRANCH: orchid
+      HERMES_ROOT: /srv/downloads
+      HERMES_PUBLIC_URL: https://download.vanillaos.org
+      HERMES_KEEP: "2"
     modules:
       - name: update-repo
         type: shell
         commands:
           - apt-get update
 
-      - name: install-deps
+      - name: install-ca-certificates
         type: apt
-        source:
-          packages:
-            - git
-            - golang
-            - nano
-
-      - name: build-app
-        type: shell
-        source:
-          type: git
-          url: https://github.com/Vanilla-OS/Hermes
-          branch: main
-          commit: latest
-        commands:
-          - mv /sources/build-app /app
-          - cd /app
-          - go build -o hermes .
+        sources:
+          - packages:
+              - ca-certificates
+        options:
+          no_recommends: true
+    copy:
+      - from: build
+        srcdst:
+          /usr/bin/hermes: /usr/bin/hermes
+    cleanup:
+      - /var/lib/apt/lists/*
+    entrypoint:
+      exec:
+        - /usr/bin/hermes
